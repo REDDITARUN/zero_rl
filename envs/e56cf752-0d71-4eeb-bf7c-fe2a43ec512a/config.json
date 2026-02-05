@@ -1,0 +1,29 @@
+{
+  "id": "8ea6a722-3eef-427f-9dba-704df0697674",
+  "name": "ZeroGrid",
+  "description": "can you make the envriemnt more like multi agent",
+  "created_at": "2026-02-05T20:46:30.910586",
+  "version": "1.0.0",
+  "action_space": {
+    "type": "Discrete",
+    "n": 4,
+    "actions": [
+      "up",
+      "right",
+      "down",
+      "left"
+    ]
+  },
+  "observation_space": {
+    "type": "Box",
+    "shape": [
+      6
+    ],
+    "dtype": "float32"
+  },
+  "reward": "Dense shaping (distance delta + step penalty + terminal goal bonus)",
+  "parameters": {
+    "grid_size": 8,
+    "max_steps": 200
+  }
+}

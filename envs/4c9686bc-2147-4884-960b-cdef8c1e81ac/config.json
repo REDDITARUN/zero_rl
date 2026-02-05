@@ -1,0 +1,60 @@
+{
+  "id": "3b6a7e0a-61fc-4d1e-9b21-5480a219c2f0",
+  "name": "CollectorWorldEnv",
+  "description": "Collect five scattered items in a grid world while minimizing wasted movement.",
+  "created_at": "2026-02-05T20:45:00Z",
+  "version": "1.0.0",
+  "action_space": {
+    "type": "Discrete",
+    "n": 4,
+    "actions": [
+      "up",
+      "right",
+      "down",
+      "left"
+    ]
+  },
+  "observation_space": {
+    "type": "Box",
+    "shape": [
+      8
+    ],
+    "dtype": "float32",
+    "description": [
+      "agent_x_normalized",
+      "agent_y_normalized",
+      "collected_items_normalized",
+      "item0_present_flag",
+      "item1_present_flag",
+      "item2_present_flag",
+      "item3_present_flag",
+      "item4_present_flag"
+    ]
+  },
+  "reward": {
+    "summary": "Strong positive rewards for collecting items, dense shaping toward the nearest target, and penalties for wasted or illegal moves.",
+    "components": [
+      {
+        "name": "item_collection",
+        "detail": "+2.0 per new item; +5.0 bonus when all five are collected."
+      },
+      {
+        "name": "step_penalty",
+        "detail": "-0.01 each step."
+      },
+      {
+        "name": "invalid_action",
+        "detail": "-0.25 when attempting to move into a wall or outside the grid."
+      },
+      {
+        "name": "distance_shaping",
+        "detail": "+0.1 times the decrease in Manhattan distance to the closest remaining item (clamped to [-0.1, 0.3])."
+      }
+    ]
+  },
+  "parameters": {
+    "grid_size": 8,
+    "max_steps": 200,
+    "total_items": 5
+  }
+}

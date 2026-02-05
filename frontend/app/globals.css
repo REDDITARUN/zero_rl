@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: #f4efe5;
+  --surface: #f9f5ed;
+  --surface-muted: #efe6d7;
+  --border: #d8c9b1;
+  --ink: #332d24;
+  --soft-ink: #5f5749;
+  --accent: #3f5a4b;
+  --accent-soft: #dbe5dd;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+  background: radial-gradient(circle at top left, #fffaf1 0%, var(--bg) 55%, #ece3d3 100%);
+  color: var(--ink);
+}
+
+body {
+  font-family: var(--font-sans), sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display), serif;
+  letter-spacing: 0.01em;
+}
+
+.scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #ccbda3;
+  border-radius: 999px;
+}
+
+.glass-panel {
+  background: color-mix(in srgb, var(--surface) 90%, white 10%);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(47, 42, 35, 0.06);
+}
+
+.pulse-active {
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0% {
+    opacity: 0.35;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0.35;
+    transform: scale(0.95);
+  }
+}

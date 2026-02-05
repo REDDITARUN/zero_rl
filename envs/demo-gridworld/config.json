@@ -1,0 +1,6 @@
+{
+  "id": "demo-gridworld",
+  "name": "DemoGridWorld",
+  "description": "Fallback maze navigation environment",
+  "version": "1.0.0"
+}

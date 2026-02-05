@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.env
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+.npm/
+
+# App env files
+backend/.env
+frontend/.env.local
+
+# Build outputs
+frontend/.next/
+frontend/out/
+frontend/dist/
+
+# OS
+.DS_Store

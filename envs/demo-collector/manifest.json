@@ -1,0 +1,6 @@
+{
+  "env_id": "demo-collector",
+  "name": "DemoCollector",
+  "prompt": "Collect items on a grid.",
+  "created_at": "2026-02-05T11:05:00"
+}
