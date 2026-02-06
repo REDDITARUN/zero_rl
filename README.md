@@ -16,20 +16,20 @@ ZeroRL is an AI-powered RL environment studio for the OpenAI Codex Hackathon.
 ## Environment Setup
 1. Backend env file
 ```bash
-cp /Users/tarun/zero_rl/zerorl/backend/.env.example /Users/tarun/zero_rl/zerorl/backend/.env
+cp backend/.env.example backend/.env
 ```
-Set at least one key in `/Users/tarun/zero_rl/zerorl/backend/.env`:
+Set at least one key in `backend/.env`:
 - `OPENAI_API_KEY=...` or `CODEX_API_KEY=...`
 
 2. Frontend env file
 ```bash
-cp /Users/tarun/zero_rl/zerorl/frontend/.env.local.example /Users/tarun/zero_rl/zerorl/frontend/.env.local
+cp frontend/.env.local.example frontend/.env.local
 ```
 
 ## How Codex SDK Is Wired
-- Orchestrator: `/Users/tarun/zero_rl/zerorl/backend/orchestrator.py`
-- Python bridge client: `/Users/tarun/zero_rl/zerorl/backend/codex_client.py`
-- Official SDK runner: `/Users/tarun/zero_rl/zerorl/backend/codex_bridge/run-agent.mjs`
+- Orchestrator: `backend/orchestrator.py`
+- Python bridge client: `backend/codex_client.py`
+- Official SDK runner: `backend/codex_bridge/run-agent.mjs`
 
 Flow:
 1. FastAPI `/api/chat` triggers orchestrator.
@@ -42,18 +42,18 @@ Flow:
 conda create -n zerorl python=3.11 -y
 conda activate zerorl
 
-cd /Users/tarun/zero_rl/zerorl/backend
+cd backend
 pip install -r requirements.txt
 
-cd /Users/tarun/zero_rl/zerorl/backend/codex_bridge
+cd codex_bridge
 npm install
 
-cd /Users/tarun/zero_rl/zerorl/backend
+cd ..
 python -m uvicorn main:app --reload --port 8000
 ```
 
 ```bash
-cd /Users/tarun/zero_rl/zerorl/frontend
+cd frontend
 npm install
 npm run dev
 ```
@@ -62,7 +62,7 @@ npm run dev
 `@prompt-kit/core` is not published as an npm package. Use shadcn registry installs from prompt-kit:
 
 ```bash
-cd /Users/tarun/zero_rl/zerorl/frontend
+cd frontend
 npx shadcn@latest add "https://prompt-kit.com/c/prompt-input.json"
 npx shadcn@latest add "https://prompt-kit.com/c/message.json"
 npx shadcn@latest add "https://prompt-kit.com/c/markdown.json"
@@ -74,8 +74,10 @@ npx shadcn@latest add "https://prompt-kit.com/c/loader.json"
 - **Dynamic tabs**: action/obs/reward panels update from generated environment metadata and runtime state.
 - **Save workflow**: generated env stays in memory until `Save To Gallery`.
 - **Gallery retrieval**: click saved env to reload and continue modifying via chat.
-- **Training tab**: configurable algorithm + hyperparameters (`PPO/DQN/A2C`, timesteps, lr, gamma, epsilon, n_steps, batch_size).
+- **Training tab**: streamlined controls (`PPO` with editable `timesteps`) while showing active training defaults.
 - **Eval tab**: live rollout stream with action trace and rendered frames.
+- **Workspace reset**: clears active selection and keeps the UI recoverable when switching contexts.
+- **Chat reset with workspace reset**: reset clears both right-panel state and left chat history.
 
 ## API Surface
 - `POST /api/chat`
@@ -100,11 +102,21 @@ npx shadcn@latest add "https://prompt-kit.com/c/loader.json"
   - run `pip install -r requirements.txt` to completion; previously this failed early at pygame.
 - `ENOENT ... .next/server/middleware-manifest.json`:
   - stop frontend and run:
-  - `rm -rf /Users/tarun/zero_rl/zerorl/frontend/.next`
-  - `cd /Users/tarun/zero_rl/zerorl/frontend && npm run dev`
+  - `rm -rf frontend/.next`
+  - `cd frontend && npm run dev`
 - Codex generation errors:
-  - ensure `OPENAI_API_KEY` or `CODEX_API_KEY` exists in `/Users/tarun/zero_rl/zerorl/backend/.env`.
+  - ensure `OPENAI_API_KEY` or `CODEX_API_KEY` exists in `backend/.env`.
   - for slow responses, increase:
   - `CODEX_TIMEOUT_SEC=480` (or higher)
   - `CODEX_MAX_RETRIES=2` (or 3)
+  - optional per-agent model overrides:
+  - `CODEX_MODEL_DOCS=...`
+  - `CODEX_MODEL_TRAINER=...`
+  - default reasoning is tuned low for speed:
+  - `CODEX_REASONING_EFFORT=low`
+  - recommended fast settings:
+  - `CODEX_MODEL_DOCS=gpt-5-mini`
+  - `CODEX_MODEL_TRAINER=gpt-5-mini`
+  - if a resumed thread was created with a different model, backend auto-starts a fresh thread.
+  - if a configured model does not exist, backend retries with `gpt-5-codex`.
   - backend now uses streamed NDJSON bridge parsing to avoid invalid envelope failures.

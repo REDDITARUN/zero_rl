@@ -33,6 +33,7 @@ class CodexSDKClient:
         output_schema: dict[str, Any],
         thread_id: str | None = None,
         progress_callback: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+        model: str | None = None,
     ) -> tuple[dict[str, Any], str | None]:
         """Execute a Codex turn and parse structured JSON response + thread id."""
 
@@ -46,7 +47,7 @@ class CodexSDKClient:
         payload = {
             "agent_id": agent_id,
             "prompt": prompt,
-            "model": self.model,
+            "model": model or self.model,
             "output_schema": output_schema,
             "working_directory": str(ROOT_DIR),
             "sandbox_mode": "read-only",

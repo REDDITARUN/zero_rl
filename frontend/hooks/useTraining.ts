@@ -1,24 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { startTraining } from "@/lib/api";
 import type { TrainingConfig, TrainingPoint } from "@/lib/types";
+import { useSessionStore } from "@/lib/sessionStore";
 import { connectSocket } from "@/lib/websocket";
 
-const DEFAULT_CONFIG: TrainingConfig = {
-  algorithm: "PPO",
-  timesteps: 5000,
-  learning_rate: 0.0003,
-  gamma: 0.99,
-  batch_size: 64,
-  n_steps: 512,
-  epsilon: 0.05
-};
-
 export function useTraining(envId: string | null) {
-  const [events, setEvents] = useState<TrainingPoint[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [config, setConfig] = useState<TrainingConfig>(DEFAULT_CONFIG);
+  const trainingByEnv = useSessionStore((state) => state.trainingByEnv);
+  const ensureTraining = useSessionStore((state) => state.ensureTraining);
+  const appendTrainingEvent = useSessionStore((state) => state.appendTrainingEvent);
+  const setTrainingBusy = useSessionStore((state) => state.setTrainingBusy);
+  const setTrainingConfig = useSessionStore((state) => state.setTrainingConfig);
+
+  useEffect(() => {
+    if (envId) {
+      ensureTraining(envId);
+    }
+  }, [envId, ensureTraining]);
 
   useEffect(() => {
     return connectSocket("/ws/train", (payload) => {
@@ -29,22 +28,40 @@ export function useTraining(envId: string | null) {
       if (!point.env_id || !point.status) {
         return;
       }
-      if (envId && point.env_id !== envId) {
+      if (!envId || point.env_id !== envId) {
         return;
       }
-      setEvents((prev) => [...prev, point]);
-      if (point.status === "complete" || point.status === "error") {
-        setBusy(false);
-      }
+      appendTrainingEvent(point.env_id, point);
     });
-  }, [envId]);
+  }, [appendTrainingEvent, envId]);
+
+  const session = envId ? trainingByEnv[envId] : undefined;
+  const events = session?.events ?? [];
+  const busy = session?.busy ?? false;
+  const config: TrainingConfig =
+    session?.config ?? {
+      algorithm: "PPO",
+      timesteps: 5000,
+      learning_rate: 0.0003,
+      gamma: 0.99,
+      batch_size: 64,
+      n_steps: 512,
+      epsilon: 0.05
+    };
 
   async function runTraining() {
     if (!envId || busy) {
       return;
     }
-    setBusy(true);
-    await startTraining(envId, config);
+    setTrainingBusy(envId, true);
+    await startTraining(envId, { ...config, algorithm: "PPO" });
+  }
+
+  function setConfig(next: TrainingConfig) {
+    if (!envId) {
+      return;
+    }
+    setTrainingConfig(envId, next);
   }
 
   const latest = useMemo(() => events[events.length - 1] ?? null, [events]);

@@ -59,11 +59,18 @@ export function useChat(options: UseChatOptions = {}) {
     [options]
   );
 
+  const clearConversation = useCallback(() => {
+    setMessages([]);
+    setError(null);
+    setLastEnv(null);
+  }, []);
+
   return {
     messages,
     loading,
     error,
     lastEnv,
-    sendPrompt
+    sendPrompt,
+    clearConversation
   };
 }

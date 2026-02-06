@@ -5,6 +5,7 @@ export interface AgentState {
   name: string;
   status: AgentRunStatus;
   message: string;
+  logs?: string[];
 }
 
 export interface ChatMessage {
@@ -75,6 +76,7 @@ export interface RuntimeState {
   observation: unknown;
   info: Record<string, unknown>;
   frame: string;
+  available_actions: string[];
   history: Array<{
     step: number;
     action: string;

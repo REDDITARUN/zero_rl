@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { PlanCard } from "@/components/chat/PlanCard";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { QuickActions } from "@/components/chat/QuickActions";
@@ -12,11 +12,12 @@ import { useChat } from "@/hooks/useChat";
 interface ChatPanelProps {
   envId: string | null;
   onEnvCreated: (envId: string) => void;
+  resetToken: number;
 }
 
-export function ChatPanel({ envId, onEnvCreated }: ChatPanelProps) {
+export function ChatPanel({ envId, onEnvCreated, resetToken }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
-  const { messages, loading, error, sendPrompt } = useChat({ onEnvCreated });
+  const { messages, loading, error, sendPrompt, clearConversation } = useChat({ onEnvCreated });
 
   const subtitle = useMemo(
     () => (envId ? `Active environment: ${envId.slice(0, 8)}` : "No environment selected"),
@@ -31,6 +32,11 @@ export function ChatPanel({ envId, onEnvCreated }: ChatPanelProps) {
     setDraft("");
     await sendPrompt(value, envId);
   }
+
+  useEffect(() => {
+    setDraft("");
+    clearConversation();
+  }, [clearConversation, resetToken]);
 
   return (
     <div className="flex h-full flex-col">

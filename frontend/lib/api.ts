@@ -11,7 +11,16 @@ const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000/api"
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(text || `HTTP ${response.status}`);
+    let detailMessage = "";
+    try {
+      const payload = JSON.parse(text) as { detail?: string };
+      if (payload.detail) {
+        detailMessage = payload.detail;
+      }
+    } catch {
+      // no-op
+    }
+    throw new Error(detailMessage || text || `HTTP ${response.status}`);
   }
   return (await response.json()) as T;
 }

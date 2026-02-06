@@ -15,7 +15,8 @@ import { useEnvState } from "@/hooks/useEnvState";
 
 interface TabPanelProps {
   envId: string | null;
-  onEnvSelected: (envId: string) => void;
+  onEnvSelected: (envId: string | null) => void;
+  onResetWorkspace: () => void;
 }
 
 type TabKey = "env" | "actions" | "obs" | "rewards" | "train" | "eval" | "code" | "gallery";
@@ -31,7 +32,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "gallery", label: "Gallery" }
 ];
 
-export function TabPanel({ envId, onEnvSelected }: TabPanelProps) {
+export function TabPanel({ envId, onEnvSelected, onResetWorkspace }: TabPanelProps) {
   const [active, setActive] = useState<TabKey>("env");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -46,6 +47,7 @@ export function TabPanel({ envId, onEnvSelected }: TabPanelProps) {
   }, [meta]);
 
   const actions = meta?.action_space?.actions ?? [];
+  const runtimeActions = runtime?.available_actions?.length ? runtime.available_actions : actions;
   const needsEnv = active !== "gallery";
 
   async function handleSave() {
@@ -84,16 +86,25 @@ export function TabPanel({ envId, onEnvSelected }: TabPanelProps) {
           ))}
         </div>
 
-        {envId ? (
+        <div className="flex items-center gap-2">
+          {envId ? (
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving || !!meta?.saved}
+              className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--soft-ink)] disabled:opacity-50"
+            >
+              {meta?.saved ? "Saved" : saving ? "Saving..." : "Save To Gallery"}
+            </button>
+          ) : null}
           <button
             type="button"
-            onClick={() => void handleSave()}
-            disabled={saving || !!meta?.saved}
-            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--soft-ink)] disabled:opacity-50"
+            onClick={onResetWorkspace}
+            className="rounded-lg border border-[var(--border)] bg-[var(--surface)] px-3 py-1 text-xs text-[var(--soft-ink)]"
           >
-            {meta?.saved ? "Saved" : saving ? "Saving..." : "Save To Gallery"}
+            Reset Workspace
           </button>
-        ) : null}
+        </div>
       </div>
 
       {saveError ? <p className="px-3 pt-2 text-xs text-red-700">{saveError}</p> : null}
@@ -110,8 +121,9 @@ export function TabPanel({ envId, onEnvSelected }: TabPanelProps) {
 
         {active === "env" && envId ? (
           <EnvViewer
+            meta={meta}
             runtime={runtime}
-            actions={actions}
+            actions={runtimeActions}
             busy={busy}
             error={error}
             onRefresh={() => void refreshState()}

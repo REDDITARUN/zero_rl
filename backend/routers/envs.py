@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import zipfile
 from datetime import datetime
 from pathlib import Path
@@ -20,6 +21,31 @@ from utils.file_ops import ensure_env_dir
 router = APIRouter(tags=["envs"])
 
 ENV_CACHE: dict[str, dict[str, Any]] = {}
+ENV_CLASS_PATTERN = re.compile(r"class\s+\w+Env\s*\(")
+
+
+def _has_env_class(env_code: str) -> bool:
+    return bool(ENV_CLASS_PATTERN.search(env_code))
+
+
+def _reward_text(config: dict[str, Any]) -> str:
+    direct = config.get("reward")
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+
+    components = config.get("reward_components")
+    if isinstance(components, list):
+        parts: list[str] = []
+        for comp in components:
+            if not isinstance(comp, dict):
+                continue
+            name = str(comp.get("name", "")).strip()
+            value = comp.get("value")
+            if name:
+                parts.append(f"{name}: {value}")
+        if parts:
+            return "; ".join(parts)
+    return ""
 
 
 def _read_saved_record(env_id: str) -> dict[str, Any] | None:
@@ -39,6 +65,9 @@ def _read_saved_record(env_id: str) -> dict[str, Any] | None:
     for path in sorted(env_dir.glob("*")):
         if path.is_file() and path.name in {"env.py", "train.py", "README.md", "config.json"}:
             files[path.name] = path.read_text(encoding="utf-8")
+    env_code = files.get("env.py", "")
+    if not env_code or not _has_env_class(env_code):
+        return None
 
     return {
         "env_id": env_id,
@@ -49,7 +78,7 @@ def _read_saved_record(env_id: str) -> dict[str, Any] | None:
         "saved": True,
         "action_space": config.get("action_space", {"type": "Discrete", "n": 4, "actions": ["up", "right", "down", "left"]}),
         "observation_space": config.get("observation_space", {"type": "Box", "shape": [6], "dtype": "float32", "description": []}),
-        "reward": config.get("reward", ""),
+        "reward": _reward_text(config),
         "files": files,
         "codex_threads": manifest.get("codex_threads", {}),
         "last_training": manifest.get("last_training", {}),
@@ -61,7 +90,10 @@ def get_env_record(env_id: str) -> dict[str, Any]:
 
     cached = ENV_CACHE.get(env_id)
     if cached is not None:
-        return cached
+        env_code = str(cached.get("files", {}).get("env.py", ""))
+        if env_code and _has_env_class(env_code):
+            return cached
+        ENV_CACHE.pop(env_id, None)
 
     saved = _read_saved_record(env_id)
     if saved is None:
@@ -190,7 +222,10 @@ async def reset_env(env_id: str) -> RuntimeState:
     if not env_code:
         raise HTTPException(status_code=400, detail="env.py missing for environment")
 
-    payload = env_runtime_manager.reset(env_id, env_code, _action_labels(record))
+    try:
+        payload = env_runtime_manager.reset(env_id, env_code, _action_labels(record))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=422, detail=f"Runtime reset failed: {type(exc).__name__}: {exc}") from exc
     return RuntimeState(**payload)
 
 
@@ -204,6 +239,7 @@ async def step_env(env_id: str, request: EnvActionRequest) -> RuntimeState:
         raise HTTPException(status_code=400, detail="env.py missing for environment")
 
     labels = _action_labels(record)
+    labels = env_runtime_manager.get_action_labels(env_id, env_code, labels)
     action_value = request.action
     if isinstance(action_value, str):
         if action_value not in labels:
@@ -212,7 +248,10 @@ async def step_env(env_id: str, request: EnvActionRequest) -> RuntimeState:
     else:
         action_index = int(action_value)
 
-    payload = env_runtime_manager.step(env_id, env_code, labels, action_index)
+    try:
+        payload = env_runtime_manager.step(env_id, env_code, labels, action_index)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=422, detail=f"Runtime step failed: {type(exc).__name__}: {exc}") from exc
     return RuntimeState(**payload)
 
 
@@ -225,7 +264,10 @@ async def get_runtime_state(env_id: str) -> RuntimeState:
     if not env_code:
         raise HTTPException(status_code=400, detail="env.py missing for environment")
 
-    payload = env_runtime_manager.get_state(env_id, env_code, _action_labels(record))
+    try:
+        payload = env_runtime_manager.get_state(env_id, env_code, _action_labels(record))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=422, detail=f"Runtime state failed: {type(exc).__name__}: {exc}") from exc
     return RuntimeState(**payload)
 
 

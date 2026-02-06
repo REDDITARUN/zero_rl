@@ -22,5 +22,9 @@ frontend/.next/
 frontend/out/
 frontend/dist/
 
+# Generated artifacts
+envs/*/model*.zip
+envs/*/__pycache__/
+
 # OS
 .DS_Store

@@ -5,12 +5,12 @@ import { connectSocket } from "@/lib/websocket";
 import type { AgentState } from "@/lib/types";
 
 const BASE_AGENTS: AgentState[] = [
-  { id: "architect", name: "Architect", status: "idle", message: "Ready" },
-  { id: "rewards", name: "Rewards", status: "idle", message: "Ready" },
-  { id: "spaces", name: "Spaces", status: "idle", message: "Ready" },
-  { id: "validator", name: "Validator", status: "idle", message: "Ready" },
-  { id: "docs", name: "Docs", status: "idle", message: "Ready" },
-  { id: "trainer", name: "Trainer", status: "idle", message: "Ready" }
+  { id: "architect", name: "Architect", status: "idle", message: "Ready", logs: [] },
+  { id: "rewards", name: "Rewards", status: "idle", message: "Ready", logs: [] },
+  { id: "spaces", name: "Spaces", status: "idle", message: "Ready", logs: [] },
+  { id: "validator", name: "Validator", status: "idle", message: "Ready", logs: [] },
+  { id: "docs", name: "Docs", status: "idle", message: "Ready", logs: [] },
+  { id: "trainer", name: "Trainer", status: "idle", message: "Ready", logs: [] }
 ];
 
 export function useAgentStatus() {
@@ -33,7 +33,10 @@ export function useAgentStatus() {
             ? {
                 ...agent,
                 status: event.status ?? agent.status,
-                message: event.message ?? agent.message
+                message: event.message ?? agent.message,
+                logs: event.message
+                  ? [...(agent.logs ?? []), event.message].slice(-6)
+                  : (agent.logs ?? [])
               }
             : agent
         )

@@ -9,6 +9,8 @@ from typing import Any
 from runtime.frame_utils import encode_frame, to_jsonable
 from runtime.module_loader import load_module_from_code, resolve_env_class
 
+MAX_UI_ACTIONS = 64
+
 
 @dataclass
 class EnvSession:
@@ -104,6 +106,12 @@ class EnvRuntimeManager:
         session = self._get_or_create(env_id, env_code, action_labels)
         return self._to_payload(env_id, session)
 
+    def get_action_labels(self, env_id: str, env_code: str, action_labels: list[str]) -> list[str]:
+        """Return runtime-validated action labels for control mapping."""
+
+        session = self._get_or_create(env_id, env_code, action_labels)
+        return list(session.action_labels)
+
     def _get_or_create(self, env_id: str, env_code: str, action_labels: list[str]) -> EnvSession:
         code_hash = hashlib.sha256(env_code.encode("utf-8")).hexdigest()
         current = self.sessions.get(env_id)
@@ -119,7 +127,24 @@ class EnvRuntimeManager:
         module, _ = load_module_from_code(env_code, env_id)
         env_class = resolve_env_class(module)
         env = env_class(render_mode="rgb_array")
-        session = EnvSession(code_hash=code_hash, env=env, action_labels=action_labels)
+
+        normalized = [str(label) for label in action_labels]
+        model_labels = getattr(env, "action_labels", None)
+        if isinstance(model_labels, list):
+            candidate = [str(label) for label in model_labels if str(label).strip()]
+            if candidate:
+                normalized = candidate
+
+        n = getattr(getattr(env, "action_space", None), "n", None)
+        if isinstance(n, int) and n > 0:
+            if len(normalized) != n:
+                normalized = [f"action_{idx}" for idx in range(n)]
+        if not normalized:
+            normalized = ["action_0", "action_1", "action_2", "action_3"]
+        if len(normalized) > MAX_UI_ACTIONS:
+            normalized = normalized[:MAX_UI_ACTIONS]
+
+        session = EnvSession(code_hash=code_hash, env=env, action_labels=normalized)
         self.sessions[env_id] = session
         return session
 
@@ -135,6 +160,7 @@ class EnvRuntimeManager:
             "observation": session.last_obs,
             "info": session.last_info,
             "frame": session.last_frame,
+            "available_actions": session.action_labels,
             "history": session.history,
         }
 

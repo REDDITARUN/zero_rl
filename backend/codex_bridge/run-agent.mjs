@@ -95,99 +95,142 @@ async function main() {
       },
     });
 
-    const thread = thread_id
-      ? codex.resumeThread(thread_id)
-      : codex.startThread({
-          model: model || process.env.CODEX_MODEL || "gpt-5-codex",
-          workingDirectory: working_directory || process.cwd(),
-          skipGitRepoCheck: true,
-          sandboxMode: sandbox_mode || "read-only",
-          approvalPolicy: approval_policy || "never",
-          networkAccessEnabled: Boolean(network_access_enabled),
-        });
+    const defaultModel = process.env.CODEX_MODEL || "gpt-5-codex";
+    const reasoningEffort = process.env.CODEX_REASONING_EFFORT || "low";
 
-    let finalResponse = "";
-    let usage = null;
-    let activeThreadId = thread_id || thread.id || null;
-    try {
-      const streamed = await thread.runStreamed(prompt, { outputSchema: output_schema });
-      for await (const event of streamed.events) {
-        if (event.type === "thread.started") {
-          activeThreadId = event.thread_id;
-          await emit({
-            type: "progress",
-            agent_id,
-            thread_id: activeThreadId,
-            status: "working",
-            message: "Thread started",
-          });
-        }
+    const buildThreadOptions = (modelName) => ({
+      model: modelName || defaultModel,
+      workingDirectory: working_directory || process.cwd(),
+      skipGitRepoCheck: true,
+      sandboxMode: sandbox_mode || "read-only",
+      approvalPolicy: approval_policy || "never",
+      networkAccessEnabled: Boolean(network_access_enabled),
+      modelReasoningEffort: reasoningEffort,
+    });
 
-        if (event.type === "item.started" || event.type === "item.updated" || event.type === "item.completed") {
-          const message = summarizeItem(event.item, event.type);
-          if (message) {
+    const runTurn = async (thread, startingThreadId) => {
+      let finalResponse = "";
+      let usage = null;
+      let activeThreadId = startingThreadId || thread.id || null;
+      try {
+        const streamed = await thread.runStreamed(prompt, { outputSchema: output_schema });
+        for await (const event of streamed.events) {
+          if (event.type === "thread.started") {
+            activeThreadId = event.thread_id;
             await emit({
               type: "progress",
               agent_id,
               thread_id: activeThreadId,
               status: "working",
-              message,
+              message: "Thread started",
             });
           }
-        }
 
-        if (event.type === "item.completed") {
-          if (event.item.type === "agent_message" && typeof event.item.text === "string") {
-            finalResponse = event.item.text;
+          if (event.type === "item.started" || event.type === "item.updated" || event.type === "item.completed") {
+            const message = summarizeItem(event.item, event.type);
+            if (message) {
+              await emit({
+                type: "progress",
+                agent_id,
+                thread_id: activeThreadId,
+                status: "working",
+                message,
+              });
+            }
+          }
+
+          if (event.type === "item.completed") {
+            if (event.item.type === "agent_message" && typeof event.item.text === "string") {
+              finalResponse = event.item.text;
+            }
+          }
+          if (event.type === "turn.completed") {
+            usage = event.usage;
+          }
+          if (event.type === "turn.failed") {
+            throw new Error(event.error?.message || "Codex turn failed");
+          }
+          if (event.type === "error") {
+            throw new Error(event.message || "Codex stream error");
           }
         }
-        if (event.type === "turn.completed") {
-          usage = event.usage;
-        }
-        if (event.type === "turn.failed") {
-          throw new Error(event.error?.message || "Codex turn failed");
-        }
-        if (event.type === "error") {
-          throw new Error(event.message || "Codex stream error");
-        }
+      } catch (streamErr) {
+        await emit({
+          type: "progress",
+          agent_id,
+          thread_id: activeThreadId,
+          status: "working",
+          message: "Stream interrupted, retrying turn",
+        });
+        const turn = await thread.run(prompt, { outputSchema: output_schema });
+        finalResponse = typeof turn.finalResponse === "string" ? turn.finalResponse : "";
+        usage = turn.usage || null;
       }
-    } catch (streamErr) {
+
+      if (!finalResponse) {
+        await emit({
+          type: "progress",
+          agent_id,
+          thread_id: activeThreadId,
+          status: "working",
+          message: "No streamed response, retrying buffered turn",
+        });
+        const turn = await thread.run(prompt, { outputSchema: output_schema });
+        finalResponse = typeof turn.finalResponse === "string" ? turn.finalResponse : "";
+        usage = turn.usage || usage;
+      }
+
+      if (!finalResponse) {
+        throw new Error("Codex returned empty final response");
+      }
+
+      return { finalResponse, usage, activeThreadId };
+    };
+
+    let selectedModel = model || defaultModel;
+    let thread = thread_id
+      ? codex.resumeThread(thread_id, buildThreadOptions(selectedModel))
+      : codex.startThread(buildThreadOptions(selectedModel));
+
+    let turnResult;
+    try {
+      turnResult = await runTurn(thread, thread_id || thread.id || null);
+    } catch (firstError) {
+      const message = firstError instanceof Error ? firstError.message : String(firstError);
+      const lower = message.toLowerCase();
+      const resumeMismatch = lower.includes("recorded with model") && lower.includes("resuming with");
+      const modelMissing = lower.includes("model_not_found") || lower.includes("does not exist");
+
+      if (!thread_id && !modelMissing) {
+        throw firstError;
+      }
+
+      if (modelMissing) {
+        selectedModel = "gpt-5-codex";
+      }
       await emit({
         type: "progress",
         agent_id,
-        thread_id: activeThreadId,
+        thread_id: thread_id || null,
         status: "working",
-        message: "Stream interrupted, retrying turn",
+        message: resumeMismatch
+          ? "Session model mismatch; starting a fresh thread"
+          : modelMissing
+            ? `Model unavailable; retrying with ${selectedModel}`
+            : "Recovering with a fresh thread",
       });
-      const turn = await thread.run(prompt, { outputSchema: output_schema });
-      finalResponse = typeof turn.finalResponse === "string" ? turn.finalResponse : "";
-      usage = turn.usage || null;
-    }
 
-    if (!finalResponse) {
-      await emit({
-        type: "progress",
-        agent_id,
-        thread_id: activeThreadId,
-        status: "working",
-        message: "No streamed response, retrying buffered turn",
-      });
-      const turn = await thread.run(prompt, { outputSchema: output_schema });
-      finalResponse = typeof turn.finalResponse === "string" ? turn.finalResponse : "";
-      usage = turn.usage || usage;
-    }
-
-    if (!finalResponse) {
-      throw new Error("Codex returned empty final response");
+      thread = codex.startThread(buildThreadOptions(selectedModel));
+      turnResult = await runTurn(thread, thread.id || null);
     }
 
     await emit({
       type: "result",
       ok: true,
       agent_id,
-      thread_id: activeThreadId || thread.id || thread_id || null,
-      usage,
-      final_response: finalResponse,
+      thread_id: turnResult.activeThreadId || thread.id || thread_id || null,
+      usage: turnResult.usage,
+      final_response: turnResult.finalResponse,
     });
     process.exitCode = 0;
     return;

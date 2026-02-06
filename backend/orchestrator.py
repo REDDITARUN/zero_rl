@@ -13,10 +13,22 @@ from uuid import uuid4
 
 from agents.validator import ValidatorAgent
 from codex_client import CodexSDKClient, CodexSDKError
-from config import CODEX_MAX_RETRIES, MAX_FIX_ATTEMPTS
+from config import (
+    CODEX_MAX_RETRIES,
+    CODEX_MODEL,
+    CODEX_MODEL_ARCHITECT,
+    CODEX_MODEL_DOCS,
+    CODEX_MODEL_REWARDS,
+    CODEX_MODEL_SPACES,
+    CODEX_MODEL_TRAINER,
+    CODEX_MODEL_VALIDATOR,
+    MAX_FIX_ATTEMPTS,
+)
 
 
 StatusCallback = Callable[[dict[str, Any]], Awaitable[None]]
+MAX_UI_ACTIONS = 32
+DEFAULT_MODEL_FALLBACK = "gpt-5-codex"
 
 
 class AgentStatus(str, Enum):
@@ -93,6 +105,7 @@ class Orchestrator:
 
         context.update(reward_result[0])
         context.update(space_result[0])
+        self._normalize_space_metadata(context)
         thread_map["rewards"] = reward_result[1] or thread_map.get("rewards", "")
         thread_map["spaces"] = space_result[1] or thread_map.get("spaces", "")
         await self._update_status("rewards", AgentStatus.COMPLETE, "Rewards complete")
@@ -239,6 +252,11 @@ class Orchestrator:
             - return deterministic, testable behavior
             - ensure observation fits observation_space
             - use earthy render palette: background (245,240,230), agent (65,92,87), goal (103,138,99)
+            - pygame rendering must remain stable: prefer basic shapes + optional text labels
+            - emojis are optional via pygame font text rendering; always fallback to plain shapes if font missing
+            - include all named entities from prompt in both logic and render (e.g., squirrel/acorns/hunter/pitfalls)
+            - expose self.action_labels list and ensure action_space.n == len(self.action_labels)
+            - step(action) must map actions using self.action_labels order
             - keep env.py concise (< 260 lines)
             - return only one environment class and required helper methods
 
@@ -330,6 +348,18 @@ class Orchestrator:
             User request:
             {user_prompt}
 
+            Environment code to align with:
+            ```python
+            {context.get('env_code','')}
+            ```
+
+            Constraints:
+            - keep action space compact and human-operable for UI controls
+            - avoid combinatorial explosion for multi-agent tasks
+            - unless explicitly requested otherwise, keep actions <= 12
+            - action labels must be unique, concise, and deterministic
+            - action_space.n must equal len(action_space.actions)
+
             Return JSON only.
             """
         ).strip()
@@ -384,12 +414,14 @@ class Orchestrator:
         raw_config = str(payload.get("config_json", "{}")).strip()
         try:
             config_obj = json.loads(raw_config)
-        except json.JSONDecodeError:
-            start = raw_config.find("{")
-            end = raw_config.rfind("}")
-            if start == -1 or end == -1 or end <= start:
-                raise CodexSDKError("Docs agent returned invalid config_json")
-            config_obj = json.loads(raw_config[start : end + 1])
+        except json.JSONDecodeError as exc:
+            snippet = _extract_first_json_object(raw_config)
+            if snippet is None:
+                raise CodexSDKError("Docs agent returned invalid config_json") from exc
+            try:
+                config_obj = json.loads(snippet)
+            except json.JSONDecodeError as second_exc:
+                raise CodexSDKError("Docs agent returned malformed config_json") from second_exc
         if not isinstance(config_obj, dict):
             raise CodexSDKError("Docs agent returned non-object config_json")
         payload["config"] = json.dumps(config_obj, indent=2)
@@ -450,7 +482,6 @@ class Orchestrator:
             "type": "object",
             "properties": {
                 "env_code": {"type": "string"},
-                "fix_summary": {"type": "string"},
             },
             "required": ["env_code"],
             "additionalProperties": False,
@@ -511,28 +542,67 @@ class Orchestrator:
         thread_id: str | None,
     ) -> tuple[dict[str, Any], str | None]:
         last_error: CodexSDKError | None = None
-        for attempt in range(1, CODEX_MAX_RETRIES + 1):
+        bridge_attempt = 0
+        current_thread = thread_id
+        model = self._model_for_agent(agent_id)
+
+        while True:
             try:
                 return await self.codex_client.run_json(
                     agent_id=agent_id,
                     prompt=prompt,
                     output_schema=output_schema,
-                    thread_id=thread_id,
+                    thread_id=current_thread,
                     progress_callback=lambda event: self._on_codex_progress(agent_id, event),
+                    model=model,
                 )
             except CodexSDKError as exc:
                 last_error = exc
                 error_text = str(exc).lower()
+                incompatible_thread = (
+                    "recorded with model" in error_text and "resuming with" in error_text
+                ) or ("session was recorded with model" in error_text)
+                if incompatible_thread and current_thread:
+                    current_thread = None
+                    bridge_attempt = 0
+                    await self._update_status(
+                        agent_id,
+                        AgentStatus.WORKING,
+                        "Thread model mismatch; starting a fresh thread",
+                    )
+                    continue
+
+                model_unavailable = (
+                    "model_not_found" in error_text
+                    or "does not exist" in error_text
+                    or "invalid model" in error_text
+                )
+                if model_unavailable:
+                    fallback = CODEX_MODEL if model != CODEX_MODEL else DEFAULT_MODEL_FALLBACK
+                    if fallback and fallback != model:
+                        previous = model
+                        model = fallback
+                        current_thread = None
+                        bridge_attempt = 0
+                        await self._update_status(
+                            agent_id,
+                            AgentStatus.WORKING,
+                            f"Model '{previous}' unavailable; retrying with '{fallback}'",
+                        )
+                        continue
+
                 retryable = (
                     "timed out" in error_text
                     or "invalid bridge json envelope" in error_text
                     or "codex bridge failed" in error_text
+                    or "stream interrupted" in error_text
                 )
-                if retryable and attempt < CODEX_MAX_RETRIES:
+                bridge_attempt += 1
+                if retryable and bridge_attempt < max(1, CODEX_MAX_RETRIES):
                     await self._update_status(
                         agent_id,
                         AgentStatus.WORKING,
-                        f"Bridge issue on attempt {attempt}/{CODEX_MAX_RETRIES}; retrying",
+                        f"Bridge issue on attempt {bridge_attempt}/{CODEX_MAX_RETRIES}; retrying",
                     )
                     continue
                 raise
@@ -540,6 +610,17 @@ class Orchestrator:
         if last_error is not None:
             raise last_error
         raise CodexSDKError(f"Unknown Codex error for agent '{agent_id}'")
+
+    def _model_for_agent(self, agent_id: str) -> str:
+        mapping = {
+            "architect": CODEX_MODEL_ARCHITECT,
+            "rewards": CODEX_MODEL_REWARDS,
+            "spaces": CODEX_MODEL_SPACES,
+            "validator": CODEX_MODEL_VALIDATOR,
+            "docs": CODEX_MODEL_DOCS,
+            "trainer": CODEX_MODEL_TRAINER,
+        }
+        return mapping.get(agent_id, CODEX_MODEL) or CODEX_MODEL
 
     def _derive_env_name(self, prompt: str) -> str:
         lowered = prompt.lower()
@@ -551,6 +632,53 @@ class Orchestrator:
             return "ZeroChase"
         return "ZeroGrid"
 
+    def _normalize_space_metadata(self, context: dict[str, Any]) -> None:
+        raw_space = context.get("action_space")
+        actions: list[str] = []
+        if isinstance(raw_space, dict):
+            seen: set[str] = set()
+            for value in raw_space.get("actions", []):
+                label = str(value).strip()
+                if not label or label in seen:
+                    continue
+                seen.add(label)
+                actions.append(label)
+
+        if not actions:
+            actions = ["up", "right", "down", "left"]
+        if len(actions) > MAX_UI_ACTIONS:
+            actions = actions[:MAX_UI_ACTIONS]
+
+        space_type = "Discrete"
+        if isinstance(raw_space, dict):
+            raw_type = str(raw_space.get("type", "")).strip()
+            if raw_type:
+                space_type = raw_type
+
+        context["action_space"] = {
+            "type": space_type,
+            "n": len(actions),
+            "actions": actions,
+        }
+
+        raw_obs = context.get("observation_space")
+        if not isinstance(raw_obs, dict):
+            return
+        shape = raw_obs.get("shape", [])
+        normalized_shape = [int(v) for v in shape if isinstance(v, int) and v > 0]
+        if not normalized_shape:
+            normalized_shape = [6]
+        description_raw = raw_obs.get("description", [])
+        if not isinstance(description_raw, list):
+            description_raw = []
+        description = [str(item).strip() for item in description_raw if str(item).strip()][:16]
+        context["observation_space"] = {
+            "type": str(raw_obs.get("type", "Box")),
+            "shape": normalized_shape,
+            "dtype": str(raw_obs.get("dtype", "float32")),
+            "description": description,
+        }
+
     def _merge_outputs(self, context: dict[str, Any]) -> str:
         """Inject reward mode adjustment into generated env code when needed."""
 
@@ -560,3 +688,37 @@ class Orchestrator:
             sparse_block = """        reward = 10.0 if reached_goal else -0.01\n        self.prev_distance = current_distance\n        return reward\n"""
             code = code.replace(dense_block, sparse_block)
         return code
+
+
+def _extract_first_json_object(text: str) -> str | None:
+    start = text.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escaped = False
+
+    for idx in range(start, len(text)):
+        ch = text[idx]
+        if in_string:
+            if escaped:
+                escaped = False
+            elif ch == "\\":
+                escaped = True
+            elif ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "{":
+            depth += 1
+            continue
+        if ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : idx + 1]
+
+    return None

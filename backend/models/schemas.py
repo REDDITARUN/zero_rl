@@ -93,6 +93,7 @@ class RuntimeState(BaseModel):
     observation: Any = None
     info: Dict[str, Any] = Field(default_factory=dict)
     frame: str
+    available_actions: List[str] = Field(default_factory=list)
 
 
 class SaveResponse(BaseModel):
