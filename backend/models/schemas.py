@@ -13,6 +13,7 @@ class ChatRequest(BaseModel):
 
     prompt: str = Field(min_length=3)
     env_id: Optional[str] = None
+    run_id: Optional[str] = None
 
 
 class AgentStatusEvent(BaseModel):
@@ -43,6 +44,7 @@ class ChatResponse(BaseModel):
     files: Dict[str, str]
     validation: ValidationResult
     saved: bool = False
+    run_id: Optional[str] = None
 
 
 class EnvSummary(BaseModel):

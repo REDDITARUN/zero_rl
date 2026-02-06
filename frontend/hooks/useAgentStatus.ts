@@ -15,15 +15,33 @@ const BASE_AGENTS: AgentState[] = [
 
 export function useAgentStatus() {
   const [agents, setAgents] = useState<AgentState[]>(BASE_AGENTS);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   useEffect(() => {
-    return connectSocket("/ws/agents", (payload) => {
+    const onRunStart = (event: Event) => {
+      const custom = event as CustomEvent<{ runId?: string }>;
+      const runId = custom.detail?.runId ?? null;
+      setActiveRunId(runId);
+      setAgents(
+        BASE_AGENTS.map((agent) => ({
+          ...agent,
+          status: "idle",
+          message: "Ready",
+          logs: []
+        }))
+      );
+    };
+    window.addEventListener("zerorl:run-start", onRunStart as EventListener);
+    const disconnect = connectSocket("/ws/agents", (payload) => {
       if (typeof payload !== "object" || payload === null) {
         return;
       }
 
-      const event = payload as { agent_id?: string; status?: AgentState["status"]; message?: string };
+      const event = payload as { agent_id?: string; status?: AgentState["status"]; message?: string; run_id?: string | null };
       if (!event.agent_id || !event.status) {
+        return;
+      }
+      if (!activeRunId || !event.run_id || event.run_id !== activeRunId) {
         return;
       }
 
@@ -42,7 +60,11 @@ export function useAgentStatus() {
         )
       );
     });
-  }, []);
+    return () => {
+      window.removeEventListener("zerorl:run-start", onRunStart as EventListener);
+      disconnect();
+    };
+  }, [activeRunId]);
 
   const summary = useMemo(
     () => ({

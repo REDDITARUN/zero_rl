@@ -41,10 +41,19 @@ class EnvRuntimeManager:
         """Reset session and return current runtime state."""
 
         session = self._get_or_create(env_id, env_code, action_labels)
-        obs, info = session.env.reset()
-        frame = session.env.render()
-        if frame is None:
-            frame = session.env._render_frame()  # type: ignore[attr-defined]
+        try:
+            obs, info = session.env.reset()
+            frame = session.env.render()
+            if frame is None:
+                frame = session.env._render_frame()  # type: ignore[attr-defined]
+        except Exception as exc:  # noqa: BLE001
+            if not self._should_recreate(exc):
+                raise
+            session = self._get_or_create(env_id, env_code, action_labels, force_recreate=True)
+            obs, info = session.env.reset()
+            frame = session.env.render()
+            if frame is None:
+                frame = session.env._render_frame()  # type: ignore[attr-defined]
 
         session.step_count = 0
         session.cumulative_reward = 0.0
@@ -67,10 +76,22 @@ class EnvRuntimeManager:
         if session.terminated or session.truncated:
             return self._to_payload(env_id, session)
 
-        obs, reward, terminated, truncated, info = session.env.step(int(action))
-        frame = session.env.render()
-        if frame is None:
-            frame = session.env._render_frame()  # type: ignore[attr-defined]
+        try:
+            obs, reward, terminated, truncated, info = session.env.step(int(action))
+            frame = session.env.render()
+            if frame is None:
+                frame = session.env._render_frame()  # type: ignore[attr-defined]
+        except Exception as exc:  # noqa: BLE001
+            if not self._should_recreate(exc):
+                raise
+            session = self._get_or_create(env_id, env_code, action_labels, force_recreate=True)
+            obs, info = session.env.reset()
+            frame = session.env.render()
+            if frame is None:
+                frame = session.env._render_frame()  # type: ignore[attr-defined]
+            reward = 0.0
+            terminated = False
+            truncated = False
 
         session.step_count += 1
         session.last_reward = float(reward)
@@ -112,10 +133,16 @@ class EnvRuntimeManager:
         session = self._get_or_create(env_id, env_code, action_labels)
         return list(session.action_labels)
 
-    def _get_or_create(self, env_id: str, env_code: str, action_labels: list[str]) -> EnvSession:
+    def _get_or_create(
+        self,
+        env_id: str,
+        env_code: str,
+        action_labels: list[str],
+        force_recreate: bool = False,
+    ) -> EnvSession:
         code_hash = hashlib.sha256(env_code.encode("utf-8")).hexdigest()
         current = self.sessions.get(env_id)
-        if current is not None and current.code_hash == code_hash:
+        if not force_recreate and current is not None and current.code_hash == code_hash:
             return current
 
         if current is not None:
@@ -147,6 +174,10 @@ class EnvRuntimeManager:
         session = EnvSession(code_hash=code_hash, env=env, action_labels=normalized)
         self.sessions[env_id] = session
         return session
+
+    def _should_recreate(self, exc: Exception) -> bool:
+        message = str(exc).lower()
+        return "library not initialized" in message or "video system not initialized" in message
 
     def _to_payload(self, env_id: str, session: EnvSession) -> dict[str, Any]:
         return {

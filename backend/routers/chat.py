@@ -35,6 +35,7 @@ async def create_or_update_environment(request: ChatRequest) -> ChatResponse:
             request.prompt,
             env_id=request.env_id,
             base_record=base_record,
+            run_id=request.run_id,
         )
     except CodexSDKError as exc:
         raise HTTPException(status_code=503, detail=f"Codex generation failed: {exc}") from exc
@@ -69,4 +70,5 @@ async def create_or_update_environment(request: ChatRequest) -> ChatResponse:
         files={name: f"in-memory://{result['env_id']}/{name}" for name in result["files"].keys()},
         validation=ValidationResult(**result["validation"]),
         saved=False,
+        run_id=result.get("run_id"),
     )

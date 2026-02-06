@@ -28,6 +28,7 @@ export interface ChatResponse {
     warnings: string[];
   };
   saved: boolean;
+  run_id?: string | null;
 }
 
 export interface EnvironmentSummary {

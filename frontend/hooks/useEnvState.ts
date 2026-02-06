@@ -48,8 +48,33 @@ export function useEnvState(envId: string | null) {
   }, [refreshMeta]);
 
   useEffect(() => {
-    void refreshState();
-  }, [refreshState]);
+    if (!envId) {
+      setRuntime(null);
+      setError(null);
+      return;
+    }
+
+    setRuntime(null);
+    setError(null);
+    setBusy(true);
+    void (async () => {
+      try {
+        // Always start from a clean episode when switching environments (e.g. gallery load).
+        const state = await resetEnvironment(envId);
+        setRuntime(state);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to initialize environment");
+        try {
+          const fallback = await getEnvironmentState(envId);
+          setRuntime(fallback);
+        } catch {
+          // Keep the original initialization error.
+        }
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [envId]);
 
   const reset = useCallback(async () => {
     if (!envId) {

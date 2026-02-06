@@ -56,6 +56,8 @@ class Orchestrator:
 
     def __init__(self, status_callback: StatusCallback | None = None) -> None:
         self.status_callback = status_callback
+        self.current_run_id: str | None = None
+        self.current_env_id: str | None = None
         self.agents: Dict[str, AgentTask] = {
             "architect": AgentTask("architect", "Env Architect", "env-architect"),
             "rewards": AgentTask("rewards", "Reward Engineer", "reward-engineer"),
@@ -72,10 +74,13 @@ class Orchestrator:
         user_prompt: str,
         env_id: str | None = None,
         base_record: dict[str, Any] | None = None,
+        run_id: str | None = None,
     ) -> dict[str, Any]:
         """Run complete workflow and return generated artifact payload."""
 
         env_id = env_id or str(uuid4())
+        self.current_env_id = env_id
+        self.current_run_id = run_id
         env_name = self._derive_env_name(user_prompt)
         thread_map: dict[str, str] = dict((base_record or {}).get("codex_threads", {}))
 
@@ -179,6 +184,7 @@ class Orchestrator:
                 "reward": context.get("description", ""),
             },
             "codex_threads": {k: v for k, v in thread_map.items() if v},
+            "run_id": self.current_run_id,
         }
 
     async def _validate_with_retries(
@@ -521,6 +527,8 @@ class Orchestrator:
                     "agent_id": agent_id,
                     "status": status.value,
                     "message": message,
+                    "run_id": self.current_run_id,
+                    "env_id": self.current_env_id,
                     "updated_at": datetime.utcnow().isoformat(),
                 }
             )

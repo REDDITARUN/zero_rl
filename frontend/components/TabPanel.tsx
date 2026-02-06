@@ -137,7 +137,14 @@ export function TabPanel({ envId, onEnvSelected, onResetWorkspace }: TabPanelPro
         {active === "train" ? <TrainPanel envId={envId} /> : null}
         {active === "eval" ? <EvalPanel envId={envId} /> : null}
         {active === "code" ? <CodeViewer envId={envId} files={files} /> : null}
-        {active === "gallery" ? <GalleryGrid onSelect={onEnvSelected} /> : null}
+        {active === "gallery" ? (
+          <GalleryGrid
+            onSelect={(selectedEnvId) => {
+              onEnvSelected(selectedEnvId);
+              setActive("env");
+            }}
+          />
+        ) : null}
       </div>
     </div>
   );

@@ -25,11 +25,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
-export async function createEnvironment(prompt: string, envId?: string | null): Promise<ChatResponse> {
+export async function createEnvironment(prompt: string, envId?: string | null, runId?: string | null): Promise<ChatResponse> {
   const response = await fetch(`${API_BASE}/chat`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ prompt, env_id: envId ?? null })
+    body: JSON.stringify({ prompt, env_id: envId ?? null, run_id: runId ?? null })
   });
   return parseResponse<ChatResponse>(response);
 }
