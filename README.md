@@ -283,6 +283,23 @@ Supported models:
 - [BOSL2](https://github.com/BelfrySCAD/BOSL2) — OpenSCAD parametric library
 - [LangChain](https://github.com/langchain-ai/langchain) — LLM agent framework
 
+## Citation
+
+If you use this work in academic research, publications, blog posts, videos, or any derived projects, please cite:
+
+```
+@misc{reddi2025zero_rl,
+  author       = {Tarun Reddi},
+  title        = {0RL — AI RL Environment Studio},
+  year         = {2025-2026},
+  url          = {https://github.com/REDDITARUN/zero_rl}
+}
+```
+
+Or in plain text:
+
+> Tarun Reddi, "0RL — AI RL Environment Studio", 2025-2026. https://github.com/REDDITARUN/zero_rl
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE) for details. Citation is required for any published or public-facing use.
