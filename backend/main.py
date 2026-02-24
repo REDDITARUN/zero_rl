@@ -1,50 +1,66 @@
-"""FastAPI entrypoint for ZeroRL backend."""
+"""FastAPI application — REST + WebSocket entry point."""
 
 from __future__ import annotations
 
-import os
+import json
 import sys
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import FRONTEND_ORIGIN, USE_CODEX_SDK
-from routers import chat, envs, eval, render, train, ws
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
-app = FastAPI(title="ZeroRL API", version="0.1.0")
+from backend.routes.assets import router as assets_router  # noqa: E402
+from backend.routes.chat import router as chat_router  # noqa: E402
+from backend.routes.envs import router as envs_router  # noqa: E402
+from backend.routes.settings import router as settings_router  # noqa: E402
+from backend.services.runner import stream_env_frames  # noqa: E402
+
+app = FastAPI(title="ZeroRL", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_ORIGIN],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:1420",  # Tauri dev
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-app.include_router(chat.router, prefix="/api")
-app.include_router(envs.router, prefix="/api")
-app.include_router(train.router, prefix="/api")
-app.include_router(eval.router, prefix="/api")
-app.include_router(render.router, prefix="/api")
-app.include_router(ws.router)
-
-
-@app.on_event("startup")
-async def startup_checks() -> None:
-    """Log common local setup issues early."""
-
-    if sys.version_info[:2] != (3, 11):
-        raise RuntimeError(
-            f"Python {sys.version_info.major}.{sys.version_info.minor} detected. "
-            "ZeroRL backend requires Python 3.11."
-        )
-
-    if USE_CODEX_SDK and not (os.getenv("OPENAI_API_KEY") or os.getenv("CODEX_API_KEY")):
-        raise RuntimeError("Missing OPENAI_API_KEY/CODEX_API_KEY with USE_CODEX_SDK=true")
+app.include_router(chat_router)
+app.include_router(assets_router, prefix="/api/assets", tags=["assets"])
+app.include_router(envs_router, prefix="/api/envs", tags=["envs"])
+app.include_router(settings_router, prefix="/api/settings", tags=["settings"])
 
 
 @app.get("/api/health")
-async def health() -> dict[str, str]:
-    """Simple liveness endpoint."""
+async def health() -> dict:
+    """Liveness probe."""
+    return {"status": "ok"}
 
-    return {"status": "ok", "service": "zerorl-backend"}
+
+@app.websocket("/ws/env/{env_id}/frames")
+async def env_frames_ws(websocket: WebSocket, env_id: str) -> None:
+    """Interactive env viewer — streams frames, accepts actions from client.
+
+    Client sends: {"action": [0.1, -0.2, ...]} or {"action": 2} or {"cmd": "reset"}
+    Server sends: {"step", "frame", "reward", "done", "actions", "info", "action_space"}
+    If no action received, uses random action (auto-play mode).
+    """
+    await websocket.accept()
+    try:
+        async for frame_data in stream_env_frames(env_id, websocket=websocket):
+            await websocket.send_text(json.dumps(frame_data))
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        try:
+            await websocket.send_text(json.dumps({"error": str(e)}))
+        except Exception:
+            pass
