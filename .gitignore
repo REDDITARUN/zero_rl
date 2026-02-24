@@ -1,30 +1,28 @@
 # Python
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
-*.pyd
-*.so
-.env
 .venv/
-venv/
-env/
 
-# Node
-node_modules/
-.npm/
+# Secrets
+.env
 
-# App env files
-backend/.env
-frontend/.env.local
+# Generated outputs (recreated at runtime)
+envs/
+assets/
 
-# Build outputs
+# Cloned docs (setup.sh clones them)
+docs/
+
+# Vendored / large deps
+core/tools/cadam_repo/
+core/tools/articulate_repo/
+
+# Frontend
+frontend/node_modules/
 frontend/.next/
 frontend/out/
-frontend/dist/
+frontend/tsconfig.tsbuildinfo
 
-# Generated artifacts
-envs/*/model*.zip
-envs/*/__pycache__/
-
-# OS
-.DS_Store
+# IDE
+.cursor/
