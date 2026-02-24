@@ -1,6 +1,6 @@
-# zero-rl
+# 0RL — From Words to Worlds
 
-AI-powered RL environment studio. Describe environments in natural language — the system generates working Gymnasium / Genesis environments with validation, training scripts, and live 3D preview.
+Describe RL environments in natural language — 0RL builds working Gymnasium / Genesis environments with validation, training scripts, and live 3D preview.
 
 ```
 "Create a 3-DOF robotic arm reaching task"
@@ -290,7 +290,7 @@ If you use this work in academic research, publications, blog posts, videos, or 
 ```
 @misc{reddi2025zero_rl,
   author       = {Tarun Reddi},
-  title        = {0RL — AI RL Environment Studio},
+  title        = {0RL — From Words to Worlds},
   year         = {2025-2026},
   url          = {https://github.com/REDDITARUN/zero_rl}
 }
@@ -298,7 +298,7 @@ If you use this work in academic research, publications, blog posts, videos, or 
 
 Or in plain text:
 
-> Tarun Reddi, "0RL — AI RL Environment Studio", 2025-2026. https://github.com/REDDITARUN/zero_rl
+> Tarun Reddi, "0RL — From Words to Worlds", 2025-2026. https://github.com/REDDITARUN/zero_rl
 
 ## License
 

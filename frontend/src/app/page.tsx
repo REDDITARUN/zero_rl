@@ -993,7 +993,7 @@ function EmptyState({ onSampleClick }: { onSampleClick: (s: string) => void }) {
             <span style={{ color: "#15F5BA" }}>0</span><span className="text-white/90">RL</span>
           </span>
         </motion.div>
-        <h2 className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-widest">ai environment studio</h2>
+        <h2 className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-widest">from words to worlds</h2>
         <p className="mt-1 text-[11px] text-muted-foreground/60">
           describe an environment. i&apos;ll build it.
         </p>
