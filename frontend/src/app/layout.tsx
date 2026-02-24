@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ZeroRL — AI RL Environment Studio",
+  title: "0RL — AI RL Environment Studio",
   description: "Generate RL environments from natural language",
 };
 

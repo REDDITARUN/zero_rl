@@ -13,8 +13,6 @@ import {
 import {
   Paperclip,
   Send,
-  Sparkles,
-  Zap,
   Settings,
   FolderOpen,
   Trash2,
@@ -293,9 +291,10 @@ export default function Home() {
           >
             <FolderOpen size={13} />
           </button>
-          <div className="flex items-center gap-1.5">
-            <Zap size={12} className="text-primary" />
-            <span className="text-[11px] font-semibold text-foreground">zero-rl</span>
+          <div className="flex items-center">
+            <span className="text-[10px] font-medium font-mono tracking-tighter leading-none">
+              <span style={{ color: "#15F5BA" }}>0</span><span className="text-white/90">RL</span>
+            </span>
           </div>
           <div className="flex-1" />
           <ConnectionBadge connected={connected} />
@@ -985,16 +984,16 @@ function EmptyState({ onSampleClick }: { onSampleClick: (s: string) => void }) {
         transition={{ duration: 0.5 }}
         className="text-center"
       >
-        <div className="mb-4 flex justify-center">
-          <motion.div
-            className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10"
-            animate={{ boxShadow: ["0 0 0px oklch(0.75 0.15 195 / 0)", "0 0 30px oklch(0.75 0.15 195 / 0.15)", "0 0 0px oklch(0.75 0.15 195 / 0)"] }}
-            transition={{ duration: 3, repeat: Infinity }}
-          >
-            <Sparkles size={20} className="text-primary" />
-          </motion.div>
-        </div>
-        <h2 className="text-[13px] font-semibold text-foreground">zero-rl</h2>
+        <motion.div
+          className="mb-3"
+          animate={{ textShadow: ["0 0 0px transparent", "0 0 24px rgba(21,245,186,0.35)", "0 0 0px transparent"] }}
+          transition={{ duration: 3, repeat: Infinity }}
+        >
+          <span className="text-[26px] font-black font-mono tracking-tight select-none">
+            <span style={{ color: "#15F5BA" }}>0</span><span className="text-white/90">RL</span>
+          </span>
+        </motion.div>
+        <h2 className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-widest">ai environment studio</h2>
         <p className="mt-1 text-[11px] text-muted-foreground/60">
           describe an environment. i&apos;ll build it.
         </p>
